@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MES 設備稼動監控</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: "Segoe UI", "Microsoft JhengHei", sans-serif; margin: 0; background: #0f172a; color: #e2e8f0; }
+    header { padding: 20px 28px; background: #1e293b; border-bottom: 2px solid #334155; }
+    header h1 { margin: 0; font-size: 20px; }
+    header p { margin: 4px 0 0; color: #94a3b8; font-size: 13px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 18px; padding: 24px 28px; }
+    .card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 18px; }
+    .card h2 { margin: 0 0 14px; font-size: 15px; color: #f1f5f9; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid #334155; }
+    th { color: #94a3b8; font-weight: 600; }
+    .bar-wrap { background: #334155; border-radius: 6px; height: 18px; min-width: 90px; position: relative; }
+    .bar { height: 100%; border-radius: 6px; background: linear-gradient(90deg,#22c55e,#16a34a); }
+    .bar.low { background: linear-gradient(90deg,#f59e0b,#dc2626); }
+    .pct { font-weight: 700; }
+    .muted { color: #64748b; font-size: 12px; }
+    a.swagger { color: #38bdf8; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>🏭 MES 設備稼動監控系統</h1>
+    <p>ASP.NET Core + Dapper + 純手寫 SQL + SQL Server　|　API 文件:<a class="swagger" href="/swagger" target="_blank">/swagger</a></p>
+    <p style="font-size:15px;color:#38bdf8;margin-top:8px">🏭 目前共有 <b id="machineCount">—</b> 台機台</p>
+  </header>
+
+  <div class="grid">
+    <div class="card">
+      <h2>📊 設備稼動率(Utilization)</h2>
+      <table id="util"><thead><tr><th>機台</th><th>名稱</th><th>運轉(分)</th><th>稼動率</th></tr></thead><tbody></tbody></table>
+    </div>
+
+    <div class="card">
+      <h2>⛔ 停機原因 Pareto</h2>
+      <table id="downtime"><thead><tr><th>分類</th><th>累計(分)</th><th>次數</th></tr></thead><tbody></tbody></table>
+    </div>
+
+    <div class="card">
+      <h2>✅ 良率(Yield)</h2>
+      <table id="yield"><thead><tr><th>機台</th><th>良品</th><th>不良</th><th>良率</th></tr></thead><tbody></tbody></table>
+    </div>
+  </div>
+
+  <script>
+    async function load(url) { const r = await fetch(url); return r.json(); }
+
+    // 抓機台總數,填進標題
+    load('/api/dashboard/machine-count').then(d => {
+      document.getElementById('machineCount').textContent = d.count;
+    });
+
+    load('/api/dashboard/utilization').then(rows => {
+      document.querySelector('#util tbody').innerHTML = rows.map(r => `
+        <tr>
+          <td>${r.code}</td><td>${r.name}</td><td>${r.runMinutes}</td>
+          <td>
+            <div style="display:flex;align-items:center;gap:8px">
+              <div class="bar-wrap"><div class="bar ${r.utilization < 80 ? 'low':''}" style="width:${r.utilization}%"></div></div>
+              <span class="pct">${r.utilization}%</span>
+            </div>
+          </td>
+        </tr>`).join('');
+    });
+
+    load('/api/dashboard/downtime-by-reason').then(rows => {
+      document.querySelector('#downtime tbody').innerHTML = rows.length
+        ? rows.map(r => `<tr><td>${r.category}</td><td>${r.minutes}</td><td>${r.count}</td></tr>`).join('')
+        : '<tr><td colspan="3" class="muted">無停機資料</td></tr>';
+    });
+
+    load('/api/dashboard/yield').then(rows => {
+      document.querySelector('#yield tbody').innerHTML = rows.map(r => `
+        <tr><td>${r.code}</td><td>${r.good}</td><td>${r.defect}</td><td class="pct">${r.yieldRate}%</td></tr>`).join('');
+    });
+  </script>
+</body>
+</html>
