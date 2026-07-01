@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Dapper;
 using MES;
@@ -6,6 +7,7 @@ namespace MES.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize]
 public class StatusLogsController : ControllerBase
 {
     private readonly Db _db;
@@ -56,6 +58,7 @@ WHERE Id = @id;";
     }
 
     [HttpDelete("{id}")]
+    [Authorize(Roles = "Manager")]
     public IActionResult Delete(int id)
     {
         const string sql = "DELETE FROM StatusLogs WHERE Id = @id;";

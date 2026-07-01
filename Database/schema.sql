@@ -55,6 +55,15 @@ CREATE TABLE ProductionLogs (
     CONSTRAINT FK_ProductionLogs_Machines FOREIGN KEY (MachineId) REFERENCES Machines(Id)
 );
 
+-- 6. 使用者(登入 + 角色權限;密碼雜湊由 C# BCrypt 產生,種子帳號在 Program.cs 塞)
+IF OBJECT_ID(N'Users', N'U') IS NULL
+CREATE TABLE Users (
+    Id           INT IDENTITY(1,1) PRIMARY KEY,
+    Username     NVARCHAR(50)  NOT NULL UNIQUE,
+    PasswordHash NVARCHAR(200) NOT NULL,
+    Role         NVARCHAR(20)  NOT NULL       -- Operator / Manager
+);
+
 -- ============================================================
 -- 種子資料(只在表為空時塞,避免重複)
 -- ============================================================

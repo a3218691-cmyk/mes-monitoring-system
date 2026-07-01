@@ -25,60 +25,200 @@
   </style>
 </head>
 <body>
-  <header>
-    <h1>🏭 MES 設備稼動監控系統</h1>
-    <p>ASP.NET Core + Dapper + 純手寫 SQL + SQL Server　|　API 文件:<a class="swagger" href="/swagger" target="_blank">/swagger</a></p>
-    <p style="font-size:15px;color:#38bdf8;margin-top:8px">🏭 目前共有 <b id="machineCount">—</b> 台機台</p>
-  </header>
-
-  <div class="grid">
-    <div class="card">
-      <h2>📊 設備稼動率(Utilization)</h2>
-      <table id="util"><thead><tr><th>機台</th><th>名稱</th><th>運轉(分)</th><th>稼動率</th></tr></thead><tbody></tbody></table>
+  <div id="loginBox" class="card" style="max-width:320px;margin:60px auto">
+    <h2>🔒 登入</h2>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <input id="loginUsername" placeholder="帳號" style="padding:8px;border-radius:6px;border:1px solid #334155;background:#0f172a;color:#e2e8f0" />
+      <input id="loginPassword" type="password" placeholder="密碼" style="padding:8px;border-radius:6px;border:1px solid #334155;background:#0f172a;color:#e2e8f0" />
+      <button id="loginBtn" style="padding:8px;border-radius:6px;border:none;background:#38bdf8;color:#0f172a;font-weight:700;cursor:pointer">登入</button>
+      <p id="loginError" style="color:#f87171;font-size:13px;margin:0;display:none">帳號或密碼錯誤</p>
     </div>
+  </div>
 
-    <div class="card">
-      <h2>⛔ 停機原因 Pareto</h2>
-      <table id="downtime"><thead><tr><th>分類</th><th>累計(分)</th><th>次數</th></tr></thead><tbody></tbody></table>
-    </div>
+  <div id="app" style="display:none">
+    <header>
+      <h1>🏭 MES 設備稼動監控系統</h1>
+      <p>ASP.NET Core + Dapper + 純手寫 SQL + SQL Server　|　API 文件:<a class="swagger" href="/swagger" target="_blank">/swagger</a></p>
+      <p style="font-size:15px;color:#38bdf8;margin-top:8px">🏭 目前共有 <b id="machineCount">—</b> 台機台</p>
+    </header>
 
-    <div class="card">
-      <h2>✅ 良率(Yield)</h2>
-      <table id="yield"><thead><tr><th>機台</th><th>良品</th><th>不良</th><th>良率</th></tr></thead><tbody></tbody></table>
+    <div class="grid">
+      <div class="card">
+        <h2>📝 報工登記</h2>
+        <div style="display:flex;flex-direction:column;gap:10px;max-width:360px">
+          <label>機台
+            <select id="slMachine" style="width:100%;padding:6px;border-radius:6px;border:1px solid #334155;background:#0f172a;color:#e2e8f0"></select>
+          </label>
+          <label>狀態
+            <select id="slStatus" style="width:100%;padding:6px;border-radius:6px;border:1px solid #334155;background:#0f172a;color:#e2e8f0">
+              <option value="運轉">運轉</option>
+              <option value="停機">停機</option>
+              <option value="待機">待機</option>
+            </select>
+          </label>
+          <label id="slReasonWrap" style="display:none">停機原因
+            <select id="slReason" style="width:100%;padding:6px;border-radius:6px;border:1px solid #334155;background:#0f172a;color:#e2e8f0">
+              <option value="1">換線</option>
+              <option value="2">故障</option>
+              <option value="3">待料</option>
+              <option value="4">保養</option>
+            </select>
+          </label>
+          <label>開始時間
+            <input id="slStart" type="datetime-local" style="width:100%;padding:6px;border-radius:6px;border:1px solid #334155;background:#0f172a;color:#e2e8f0" />
+          </label>
+          <label>結束時間(可留空)
+            <input id="slEnd" type="datetime-local" style="width:100%;padding:6px;border-radius:6px;border:1px solid #334155;background:#0f172a;color:#e2e8f0" />
+          </label>
+          <button id="slSubmit" style="padding:8px;border-radius:6px;border:none;background:#38bdf8;color:#0f172a;font-weight:700;cursor:pointer">送出</button>
+          <p id="slMsg" style="font-size:13px;margin:0;display:none"></p>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>📊 設備稼動率(Utilization)</h2>
+        <table id="util"><thead><tr><th>機台</th><th>名稱</th><th>運轉(分)</th><th>稼動率</th></tr></thead><tbody></tbody></table>
+      </div>
+
+      <div class="card">
+        <h2>⛔ 停機原因 Pareto</h2>
+        <table id="downtime"><thead><tr><th>分類</th><th>累計(分)</th><th>次數</th></tr></thead><tbody></tbody></table>
+      </div>
+
+      <div class="card">
+        <h2>✅ 良率(Yield)</h2>
+        <table id="yield"><thead><tr><th>機台</th><th>良品</th><th>不良</th><th>良率</th></tr></thead><tbody></tbody></table>
+      </div>
     </div>
   </div>
 
   <script>
-    async function load(url) { const r = await fetch(url); return r.json(); }
+    // token 存在 localStorage;有 token 才顯示 dashboard,沒有就顯示登入表單
+    function showApp() {
+      document.getElementById('loginBox').style.display = 'none';
+      document.getElementById('app').style.display = 'block';
+      loadDashboard();
+      loadMachineOptions();
+    }
+    function showLogin() {
+      localStorage.removeItem('token');
+      document.getElementById('loginBox').style.display = 'block';
+      document.getElementById('app').style.display = 'none';
+    }
 
-    // 抓機台總數,填進標題
-    load('/api/dashboard/machine-count').then(d => {
-      document.getElementById('machineCount').textContent = d.count;
+    async function load(url) {
+      const token = localStorage.getItem('token');
+      const r = await fetch(url, { headers: { Authorization: 'Bearer ' + token } });
+      if (r.status === 401) { showLogin(); throw new Error('unauthorized'); }
+      if (r.status === 403) { throw new Error('forbidden'); }   // 帳密沒錯,只是權限不夠,不退回登入畫面
+      return r.json();
+    }
+
+    document.getElementById('loginBtn').addEventListener('click', async () => {
+      const username = document.getElementById('loginUsername').value;
+      const password = document.getElementById('loginPassword').value;
+      const r = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+      });
+      if (!r.ok) {
+        document.getElementById('loginError').style.display = 'block';
+        return;
+      }
+      const d = await r.json();
+      localStorage.setItem('token', d.token);
+      document.getElementById('loginError').style.display = 'none';
+      showApp();
     });
 
-    load('/api/dashboard/utilization').then(rows => {
-      document.querySelector('#util tbody').innerHTML = rows.map(r => `
-        <tr>
-          <td>${r.code}</td><td>${r.name}</td><td>${r.runMinutes}</td>
-          <td>
-            <div style="display:flex;align-items:center;gap:8px">
-              <div class="bar-wrap"><div class="bar ${r.utilization < 80 ? 'low':''}" style="width:${r.utilization}%"></div></div>
-              <span class="pct">${r.utilization}%</span>
-            </div>
-          </td>
-        </tr>`).join('');
+    function loadDashboard() {
+      const noPermMsg = '您的帳號權限無法查看此報表';
+
+      // 抓機台總數,填進標題
+      load('/api/dashboard/machine-count').then(d => {
+        document.getElementById('machineCount').textContent = d.count;
+      }).catch(e => {
+        if (e.message === 'forbidden') document.getElementById('machineCount').textContent = '權限不足';
+      });
+
+      load('/api/dashboard/utilization').then(rows => {
+        document.querySelector('#util tbody').innerHTML = rows.map(r => `
+          <tr>
+            <td>${r.code}</td><td>${r.name}</td><td>${r.runMinutes}</td>
+            <td>
+              <div style="display:flex;align-items:center;gap:8px">
+                <div class="bar-wrap"><div class="bar ${r.utilization < 80 ? 'low':''}" style="width:${r.utilization}%"></div></div>
+                <span class="pct">${r.utilization}%</span>
+              </div>
+            </td>
+          </tr>`).join('');
+      }).catch(e => {
+        if (e.message === 'forbidden') document.querySelector('#util tbody').innerHTML = `<tr><td colspan="4" class="muted">${noPermMsg}</td></tr>`;
+      });
+
+      load('/api/dashboard/downtime-by-reason').then(rows => {
+        document.querySelector('#downtime tbody').innerHTML = rows.length
+          ? rows.map(r => `<tr><td>${r.category}</td><td>${r.minutes}</td><td>${r.count}</td></tr>`).join('')
+          : '<tr><td colspan="3" class="muted">無停機資料</td></tr>';
+      }).catch(e => {
+        if (e.message === 'forbidden') document.querySelector('#downtime tbody').innerHTML = `<tr><td colspan="3" class="muted">${noPermMsg}</td></tr>`;
+      });
+
+      load('/api/dashboard/yield').then(rows => {
+        document.querySelector('#yield tbody').innerHTML = rows.map(r => `
+          <tr><td>${r.code}</td><td>${r.good}</td><td>${r.defect}</td><td class="pct">${r.yieldRate}%</td></tr>`).join('');
+      }).catch(e => {
+        if (e.message === 'forbidden') document.querySelector('#yield tbody').innerHTML = `<tr><td colspan="4" class="muted">${noPermMsg}</td></tr>`;
+      });
+    }
+
+    // 機台下拉選單(報工表單用)— GET /api/machines 兩種角色都能打
+    function loadMachineOptions() {
+      load('/api/machines').then(rows => {
+        document.getElementById('slMachine').innerHTML = rows.map(r => `<option value="${r.id}">${r.code} ${r.name}</option>`).join('');
+      }).catch(() => {});
+    }
+
+    document.getElementById('slStatus').addEventListener('change', () => {
+      const isDown = document.getElementById('slStatus').value === '停機';
+      document.getElementById('slReasonWrap').style.display = isDown ? 'block' : 'none';
     });
 
-    load('/api/dashboard/downtime-by-reason').then(rows => {
-      document.querySelector('#downtime tbody').innerHTML = rows.length
-        ? rows.map(r => `<tr><td>${r.category}</td><td>${r.minutes}</td><td>${r.count}</td></tr>`).join('')
-        : '<tr><td colspan="3" class="muted">無停機資料</td></tr>';
+    document.getElementById('slSubmit').addEventListener('click', async () => {
+      const msg = document.getElementById('slMsg');
+      const status = document.getElementById('slStatus').value;
+      const start = document.getElementById('slStart').value;
+      if (!start) {
+        msg.textContent = '請填開始時間'; msg.style.color = '#f87171'; msg.style.display = 'block';
+        return;
+      }
+
+      const body = {
+        machineId: Number(document.getElementById('slMachine').value),
+        status,
+        reasonId: status === '停機' ? Number(document.getElementById('slReason').value) : null,
+        startTime: start,
+        endTime: document.getElementById('slEnd').value || null
+      };
+
+      const token = localStorage.getItem('token');
+      const r = await fetch('/api/statuslogs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+        body: JSON.stringify(body)
+      });
+
+      if (r.status === 401) { showLogin(); return; }
+      if (!r.ok) {
+        msg.textContent = '報工失敗'; msg.style.color = '#f87171'; msg.style.display = 'block';
+        return;
+      }
+      msg.textContent = '報工成功'; msg.style.color = '#4ade80'; msg.style.display = 'block';
     });
 
-    load('/api/dashboard/yield').then(rows => {
-      document.querySelector('#yield tbody').innerHTML = rows.map(r => `
-        <tr><td>${r.code}</td><td>${r.good}</td><td>${r.defect}</td><td class="pct">${r.yieldRate}%</td></tr>`).join('');
-    });
+    // 有 token 就直接進 dashboard(不驗證是否過期,過期的話 API 會回 401 再退回登入)
+    if (localStorage.getItem('token')) showApp(); else showLogin();
   </script>
 </body>
 </html>

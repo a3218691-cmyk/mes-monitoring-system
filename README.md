@@ -6,12 +6,14 @@
 
 ```bash
 cd C:\Users\tang\MES
+dotnet user-secrets set "Jwt:Key" "你自己的隨機字串(至少32字元)"   # 第一次跑之前先設定,不會進 git
 dotnet run
 ```
 
 - 啟動時會**自動建庫建表 + 種子資料**(`Database.Migrate()`),不必手動下 SQL。
-- Dashboard 網頁:啟動後看 console 印出的網址(預設 `https://localhost:7xxx` / `http://localhost:5xxx`),直接開根目錄 `/`。
+- Dashboard 網頁:啟動後看 console 印出的網址(預設 `https://localhost:7xxx` / `http://localhost:5xxx`),直接開根目錄 `/`,會先看到登入畫面。
 - API 文件(Swagger):`/swagger`
+- 測試帳密(啟動時自動種子):`operator` / `Operator@123`(現場工)、`manager` / `Manager@123`(主管)。
 
 連線字串在 `appsettings.json` → `ConnectionStrings:Mes`,目前指向 `.\SQLEXPRESS`。
 
@@ -40,3 +42,4 @@ dotnet run
 - **StatusLog 存時間區間而非當下狀態** → 管理者要的是稼動率分析,得從歷史區間算。
 - **停機原因獨立成對照表用 ReasonId 關聯** → 現場原因要能統計分類,不能自由打字(正規化)。
 - 稼動率 = 運轉時數 ÷ (運轉+停機+待機) 時數,在 `DashboardController` 用 GROUP BY 算。
+- **登入用 JWT + BCrypt**:密碼只存雜湊(BCrypt 單向、含 salt),登入成功簽發 JWT,角色放進 `ClaimTypes.Role` claim。`[Authorize(Roles = "Manager")]` 掛在 controller/action 上做角色門檻,不用另外寫權限判斷邏輯。

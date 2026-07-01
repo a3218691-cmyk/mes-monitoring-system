@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Dapper;
 using MES;
@@ -6,6 +7,7 @@ namespace MES.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize(Roles = "Manager")]
 public class DashboardController : ControllerBase
 {
     private readonly Db _db;
