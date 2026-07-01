@@ -29,34 +29,7 @@ ORDER BY s.StartTime;";
         return Ok(conn.Query(sql, new { machineId }));
     }
 
-    // 新增狀態記錄(報工就是打這支)
-    [HttpPost]
-    public IActionResult Create([FromBody] StatusLogInput input)
-    {
-        const string sql = @"
-INSERT INTO StatusLogs (MachineId, Status, ReasonId, StartTime, EndTime)
-VALUES (@MachineId, @Status, @ReasonId, @StartTime, @EndTime);
-SELECT CAST(SCOPE_IDENTITY() AS INT);";
-
-        using var conn = _db.Open();
-        int newId = conn.ExecuteScalar<int>(sql, input);
-        return Ok(new { id = newId });
-    }
-
-    [HttpPut("{id}")]
-    public IActionResult Update(int id, [FromBody] StatusLogInput input)
-    {
-        const string sql = @"
-UPDATE StatusLogs
-SET MachineId = @MachineId, Status = @Status, ReasonId = @ReasonId,
-    StartTime = @StartTime, EndTime = @EndTime
-WHERE Id = @id;";
-
-        using var conn = _db.Open();
-        int rows = conn.Execute(sql, new { id, input.MachineId, input.Status, input.ReasonId, input.StartTime, input.EndTime });
-        return rows == 0 ? NotFound() : NoContent();
-    }
-
+    // 報工改由 PlcSimulatorService 背景模擬產生,這裡只保留查詢 + Manager 修正髒資料用的刪除
     [HttpDelete("{id}")]
     [Authorize(Roles = "Manager")]
     public IActionResult Delete(int id)
@@ -67,5 +40,3 @@ WHERE Id = @id;";
         return rows == 0 ? NotFound() : NoContent();
     }
 }
-
-public record StatusLogInput(int MachineId, string Status, int? ReasonId, DateTime StartTime, DateTime? EndTime);

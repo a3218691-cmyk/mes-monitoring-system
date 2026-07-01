@@ -22,6 +22,9 @@
     .pct { font-weight: 700; }
     .muted { color: #64748b; font-size: 12px; }
     a.swagger { color: #38bdf8; text-decoration: none; }
+    .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #64748b; margin-right: 6px; }
+    .dot.run { background: #22c55e; }
+    .dot.down { background: #ef4444; }
   </style>
 </head>
 <body>
@@ -44,35 +47,8 @@
 
     <div class="grid">
       <div class="card">
-        <h2>📝 報工登記</h2>
-        <div style="display:flex;flex-direction:column;gap:10px;max-width:360px">
-          <label>機台
-            <select id="slMachine" style="width:100%;padding:6px;border-radius:6px;border:1px solid #334155;background:#0f172a;color:#e2e8f0"></select>
-          </label>
-          <label>狀態
-            <select id="slStatus" style="width:100%;padding:6px;border-radius:6px;border:1px solid #334155;background:#0f172a;color:#e2e8f0">
-              <option value="運轉">運轉</option>
-              <option value="停機">停機</option>
-              <option value="待機">待機</option>
-            </select>
-          </label>
-          <label id="slReasonWrap" style="display:none">停機原因
-            <select id="slReason" style="width:100%;padding:6px;border-radius:6px;border:1px solid #334155;background:#0f172a;color:#e2e8f0">
-              <option value="1">換線</option>
-              <option value="2">故障</option>
-              <option value="3">待料</option>
-              <option value="4">保養</option>
-            </select>
-          </label>
-          <label>開始時間
-            <input id="slStart" type="datetime-local" style="width:100%;padding:6px;border-radius:6px;border:1px solid #334155;background:#0f172a;color:#e2e8f0" />
-          </label>
-          <label>結束時間(可留空)
-            <input id="slEnd" type="datetime-local" style="width:100%;padding:6px;border-radius:6px;border:1px solid #334155;background:#0f172a;color:#e2e8f0" />
-          </label>
-          <button id="slSubmit" style="padding:8px;border-radius:6px;border:none;background:#38bdf8;color:#0f172a;font-weight:700;cursor:pointer">送出</button>
-          <p id="slMsg" style="font-size:13px;margin:0;display:none"></p>
-        </div>
+        <h2>🟢 即時機台狀態</h2>
+        <table id="liveStatus"><thead><tr><th>機台</th><th>狀態</th><th>停機原因</th><th>最後更新</th></tr></thead><tbody></tbody></table>
       </div>
 
       <div class="card">
@@ -92,18 +68,54 @@
     </div>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/@microsoft/signalr@7/dist/browser/signalr.min.js"></script>
   <script>
     // token 存在 localStorage;有 token 才顯示 dashboard,沒有就顯示登入表單
     function showApp() {
       document.getElementById('loginBox').style.display = 'none';
       document.getElementById('app').style.display = 'block';
       loadDashboard();
-      loadMachineOptions();
+      loadMachineStatus();
+      startConnection();
     }
     function showLogin() {
       localStorage.removeItem('token');
       document.getElementById('loginBox').style.display = 'block';
       document.getElementById('app').style.display = 'none';
+      if (connection) { connection.stop(); connection = null; }
+    }
+
+    // SignalR:接收 PlcSimulatorService 廣播的機台狀態變化,即時更新燈號
+    let connection = null;
+    function startConnection() {
+      connection = new signalR.HubConnectionBuilder()
+        .withUrl('/hubs/machine-status', { accessTokenFactory: () => localStorage.getItem('token') })
+        .withAutomaticReconnect()
+        .build();
+      connection.on('MachineStatusChanged', updateMachineStatus);
+      connection.start().catch(() => {});
+    }
+
+    function updateMachineStatus(data) {
+      const row = document.getElementById('ms-' + data.machineId);
+      if (!row) return;
+      row.querySelector('.dot').className = 'dot ' + (data.status === '運轉' ? 'run' : 'down');
+      row.querySelector('.ms-status').textContent = data.status;
+      row.querySelector('.ms-reason').textContent = data.reasonCategory || '—';
+      row.querySelector('.ms-time').textContent = new Date(data.timestamp).toLocaleTimeString('zh-TW');
+    }
+
+    // 即時狀態卡片初始畫面:抓機台清單,狀態先顯示「等待更新」,等 SignalR 推播進來再填
+    function loadMachineStatus() {
+      load('/api/machines').then(rows => {
+        document.querySelector('#liveStatus tbody').innerHTML = rows.map(r => `
+          <tr id="ms-${r.id}">
+            <td>${r.code}</td>
+            <td><span class="dot"></span><span class="ms-status">等待更新</span></td>
+            <td class="ms-reason muted">—</td>
+            <td class="ms-time muted">—</td>
+          </tr>`).join('');
+      }).catch(() => {});
     }
 
     async function load(url) {
@@ -172,50 +184,6 @@
         if (e.message === 'forbidden') document.querySelector('#yield tbody').innerHTML = `<tr><td colspan="4" class="muted">${noPermMsg}</td></tr>`;
       });
     }
-
-    // 機台下拉選單(報工表單用)— GET /api/machines 兩種角色都能打
-    function loadMachineOptions() {
-      load('/api/machines').then(rows => {
-        document.getElementById('slMachine').innerHTML = rows.map(r => `<option value="${r.id}">${r.code} ${r.name}</option>`).join('');
-      }).catch(() => {});
-    }
-
-    document.getElementById('slStatus').addEventListener('change', () => {
-      const isDown = document.getElementById('slStatus').value === '停機';
-      document.getElementById('slReasonWrap').style.display = isDown ? 'block' : 'none';
-    });
-
-    document.getElementById('slSubmit').addEventListener('click', async () => {
-      const msg = document.getElementById('slMsg');
-      const status = document.getElementById('slStatus').value;
-      const start = document.getElementById('slStart').value;
-      if (!start) {
-        msg.textContent = '請填開始時間'; msg.style.color = '#f87171'; msg.style.display = 'block';
-        return;
-      }
-
-      const body = {
-        machineId: Number(document.getElementById('slMachine').value),
-        status,
-        reasonId: status === '停機' ? Number(document.getElementById('slReason').value) : null,
-        startTime: start,
-        endTime: document.getElementById('slEnd').value || null
-      };
-
-      const token = localStorage.getItem('token');
-      const r = await fetch('/api/statuslogs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-        body: JSON.stringify(body)
-      });
-
-      if (r.status === 401) { showLogin(); return; }
-      if (!r.ok) {
-        msg.textContent = '報工失敗'; msg.style.color = '#f87171'; msg.style.display = 'block';
-        return;
-      }
-      msg.textContent = '報工成功'; msg.style.color = '#4ade80'; msg.style.display = 'block';
-    });
 
     // 有 token 就直接進 dashboard(不驗證是否過期,過期的話 API 會回 401 再退回登入)
     if (localStorage.getItem('token')) showApp(); else showLogin();

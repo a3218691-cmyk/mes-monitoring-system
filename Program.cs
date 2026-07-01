@@ -4,6 +4,8 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Data.SqlClient;
 using Microsoft.IdentityModel.Tokens;
 using MES;
+using MES.Hubs;
+using MES.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -17,6 +19,8 @@ builder.Services.AddControllers().AddJsonOptions(o =>
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddSingleton<Db>();   // 連線小工具
+builder.Services.AddSignalR();
+builder.Services.AddHostedService<PlcSimulatorService>();   // 模擬 PLC 背景回報機台狀態
 
 // Jwt:Key 沒設定就直接炸,不要讓系統靜默用空字串簽 JWT(等於沒有密鑰保護)
 var jwtKey = builder.Configuration["Jwt:Key"];
@@ -40,6 +44,21 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateLifetime = true,
             ClockSkew = TimeSpan.Zero
         };
+
+        // SignalR 走 WebSocket 時瀏覽器無法帶自訂 header,accessTokenFactory 只能改用 query string 傳 token,
+        // 這裡讓 hubs 路徑額外從 query string 讀 access_token,其餘 API 仍走原本的 Authorization header
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                var accessToken = context.Request.Query["access_token"];
+                if (!string.IsNullOrEmpty(accessToken) && context.HttpContext.Request.Path.StartsWithSegments("/hubs"))
+                {
+                    context.Token = accessToken;
+                }
+                return Task.CompletedTask;
+            }
+        };
     });
 builder.Services.AddAuthorization();
 
@@ -60,6 +79,7 @@ app.UseStaticFiles();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
+app.MapHub<MachineStatusHub>("/hubs/machine-status");
 app.Run();
 
 // 建庫+跑 schema.sql 的邏輯抽到 DatabaseInitializer(MES.Tests 也會重用)
