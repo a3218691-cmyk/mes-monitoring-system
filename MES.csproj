@@ -13,6 +13,14 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- MES.Tests 是子目錄,預設 glob 會誤把測試專案的檔案也編進來,排除掉 -->
+    <Compile Remove="MES.Tests\**" />
+    <Content Remove="MES.Tests\**" />
+    <None Remove="MES.Tests\**" />
+    <EmbeddedResource Remove="MES.Tests\**" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Dapper" Version="2.1.35" />
     <PackageReference Include="Microsoft.Data.SqlClient" Version="5.1.5" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.2.3" />

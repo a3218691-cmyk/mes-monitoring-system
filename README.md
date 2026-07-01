@@ -1,3 +1,5 @@
+![CI](https://github.com/a3218691-cmyk/mes-monitoring-system/actions/workflows/ci.yml/badge.svg)
+
 # MES 設備稼動監控系統
 
 電子製造 MES 風格作品集。技術棧:**C# / ASP.NET Core 6 + SQL Server 2022 Express**。
@@ -16,6 +18,15 @@ dotnet run
 - 測試帳密(啟動時自動種子):`operator` / `Operator@123`(現場工)、`manager` / `Manager@123`(主管)。
 
 連線字串在 `appsettings.json` → `ConnectionStrings:Mes`,目前指向 `.\SQLEXPRESS`。
+
+## 怎麼跑測試
+
+```bash
+dotnet test
+```
+
+- 本機需要 `MesMonitoringTest` 這個資料庫(第一次跑會自動建立,跟展示用的 `MesMonitoring` 是不同庫,不會互相干擾)。
+- 也可以設定環境變數 `MES_TEST_CONNECTION_STRING` 指向別的測試資料庫。
 
 ## 五張表(`Models/Entities.cs`)
 
